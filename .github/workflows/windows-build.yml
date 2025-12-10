@@ -12,6 +12,7 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 120
     
     steps:
       - name: Checkout repository
@@ -35,9 +36,8 @@ jobs:
         with:
           vs-version: '[17.0,18.0)'
       
-      - name: Install CMake and Ninja
+      - name: Verify CMake and Ninja
         run: |
-          choco install cmake ninja -y
           cmake --version
           ninja --version
         shell: pwsh
@@ -62,6 +62,10 @@ jobs:
       - name: Build Goo Engine
         run: |
           cd ../build_windows
+          if not exist build.ninja (
+            echo "Error: build.ninja not found. CMake configuration may have failed."
+            exit 1
+          )
           ninja
         shell: cmd
       

@@ -46,8 +46,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ../lib
-            ../build_windows
+            ${{ github.workspace }}/../lib
+            ${{ github.workspace }}/../build_windows
           key: ${{ runner.os }}-build-deps-${{ hashFiles('**/CMakeLists.txt') }}
           restore-keys: |
             ${{ runner.os }}-build-deps-
@@ -61,7 +61,11 @@ jobs:
       
       - name: Build Goo Engine
         run: |
-          cd ../build_windows
+          if not exist ..\build_windows (
+            echo "Error: build_windows directory not found. CMake configuration may have failed."
+            exit 1
+          )
+          cd ..\build_windows
           if not exist build.ninja (
             echo "Error: build.ninja not found. CMake configuration may have failed."
             exit 1
@@ -71,11 +75,18 @@ jobs:
       
       - name: Package build artifacts
         run: |
-          mkdir artifacts
           if (Test-Path ../build_windows/bin/Release) {
+            New-Item -ItemType Directory -Force -Path artifacts
             Copy-Item -Path ../build_windows/bin/Release/* -Destination artifacts/ -Recurse -Force
+            Write-Output "Packaged artifacts from bin/Release"
           } elseif (Test-Path ../build_windows/bin) {
+            New-Item -ItemType Directory -Force -Path artifacts
             Copy-Item -Path ../build_windows/bin/* -Destination artifacts/ -Recurse -Force
+            Write-Output "Packaged artifacts from bin"
+          } else {
+            Write-Warning "No build outputs found in ../build_windows/bin/"
+            Write-Output "Build may have failed or outputs are in a different location"
+            exit 1
           }
         shell: pwsh
       

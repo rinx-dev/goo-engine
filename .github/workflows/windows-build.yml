@@ -1,0 +1,95 @@
+name: Windows Build
+
+on:
+  push:
+    branches:
+      - goo-engine-v4.4-release
+  pull_request:
+    branches:
+      - goo-engine-v4.4-release
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+        shell: pwsh
+      
+      - name: Setup Visual Studio Build Tools
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: '[17.0,18.0)'
+      
+      - name: Install CMake and Ninja
+        run: |
+          choco install cmake ninja -y
+          cmake --version
+          ninja --version
+        shell: pwsh
+      
+      - name: Cache build dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ../lib
+            ../build_windows
+          key: ${{ runner.os }}-build-deps-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-build-deps-
+      
+      - name: Configure CMake
+        run: |
+          make.bat nobuild ninja 2022
+        shell: cmd
+        env:
+          CMAKE_BUILD_TYPE: Release
+      
+      - name: Build Goo Engine
+        run: |
+          cd ../build_windows
+          ninja
+        shell: cmd
+      
+      - name: Package build artifacts
+        run: |
+          mkdir artifacts
+          if (Test-Path ../build_windows/bin/Release) {
+            Copy-Item -Path ../build_windows/bin/Release/* -Destination artifacts/ -Recurse -Force
+          } elseif (Test-Path ../build_windows/bin) {
+            Copy-Item -Path ../build_windows/bin/* -Destination artifacts/ -Recurse -Force
+          }
+        shell: pwsh
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: goo-engine-windows-${{ github.sha }}
+          path: artifacts/
+          retention-days: 30
+          if-no-files-found: warn
+      
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ github.sha }}
+          path: |
+            ../build_windows/CMakeFiles/*.log
+            ../build_windows/*.log
+          retention-days: 7
+          if-no-files-found: ignore
